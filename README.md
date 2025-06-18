@@ -1,8 +1,8 @@
-# Braid is a framework for intergration human and robotic operators for self driving labs
+# Braid is a MES framework for human and robotic operators 
 
 ## Manifest
 
-Braid is a framework for integrating human and robotic operators for self-driving labs. A lab, its worfklows, samples, and events are all represnted by foundational `block` that can be structured in anyway. The focus of braid is to ensure the all data end-to-end is aggregated in such a way to provide the simplest method of model training.
+A lab, its worfklows, samples, and events are all represnted by foundational `block` that can be structured in anyway. The focus of braid is to ensure the all data end-to-end is aggregated in such a way to provide the simplest method of model training.
 
 ## Architecture
 
