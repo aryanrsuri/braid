@@ -2,12 +2,11 @@
 
 ## Manifest
 
-Braid is a framework for integrating human and robotic operators for self-driving labs. It provides a structured way to represent and manage scientific processes, focusing on the lifecycle of samples and their associated events. Braid is designed to be flexible, extensible, and capable of handling complex workflows in laboratory environments.
-
+Braid is a framework for integrating human and robotic operators for self-driving labs. A lab, its worfklows, samples, and events are all represnted by foundational `block` that can be structured in anyway. The focus of braid is to ensure the all data end-to-end is aggregated in such a way to provide the simplest method of model training.
 
 ## Architecture
 
-Braid (graph), represents a `sample` as a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) which consists of various node types to fully describe a unique process and serial. This architecture is heavily inspired by [LabGraph](https://labgraph.readthedocs.io/en/latest/schema.html)
+Braid (graph), represents a `sample` as a [directed acyclic graph](https://en.wikipedia.org/wiki/Directed_acyclic_graph) which consists of various node types to fully describe a unique process and serial. This architecture is heavily inspired by [LabGraph](https://labgraph.readthedocs.io/en/latest/schema.html) and [ALabOS](https://cedergrouphub.github.io/alabos/)
 
 ## Constructs
 
