@@ -16,6 +16,15 @@ class versionstamp:
         self._lock = Lock()
 
     def __call__(self) -> versionid:
+        """
+        Generate a new version stamp.
+        A version stamp is a 16-byte value consisting of:
+        - 8 bytes for the current time in microseconds since the epoch.
+        - 2 bytes for a counter that increments with each call within the same microsecond.
+        - 2 bytes for a random value to ensure uniqueness in case of multiple calls within the same microsecond.
+        This method is thread-safe and ensures that each call generates a unique version stamp even if called concurrently.
+        :return: A version stamp as a hex string.
+        """
         now = time_ns() // 1_000
         with self._lock:
             if now != self._prev_time:
@@ -25,32 +34,5 @@ class versionstamp:
                 self._count += 1
             packed = pack(">QHH", self._prev_time, self._count, getrandbits(16))
         return packed.hex()
-
-    def update(self, version: versionid) -> versionid:
-        if not self.validate(version):
-            raise ValueError("Poisoned version stamp")
-        packed = bytes.fromhex(version)
-        time, _, rand = unpack(">QHH", packed)
-        with self._lock:
-            if time > self._prev_time:
-                self._prev_time = time
-                self._count = 0
-            elif time == self._prev_time:
-                self._count += 1
-            else:
-                raise ValueError("Version stamp is out of order")
-            packed = pack(">QHH", self._prev_time, self._count, rand)
-        return packed.hex()
     
-    def validate(self, version: versionid) -> bool:
-        if len(version) != 24 or not all(c in "0123456789abcdef" for c in version):
-            return False
-        try:
-            packed = bytes.fromhex(version)
-            if len(packed) != 12:
-                return False
-            return True
-        except Exception:
-            return False
-
 
