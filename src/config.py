@@ -3,6 +3,7 @@ from pydantic import BaseModel, Field
 from src.view import BaseView
 from src.ingredient import Ingredient
 from src.event import Material
+from src.experiment import BaseExperiment
 from util.versionstamp import versionstamp
 from time import time_ns
 """

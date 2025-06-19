@@ -1,42 +1,19 @@
-"""
-### Event
-
-#### Material
-
-A _material_ is an event created by an _action_ that represents a physical material in a phsyical state, materials can feed a new action, and/or feed a measuremnt to yield raw data.
-
-Examples of a material are: Zirconia dopant, Thermo Fischer HCL 0.05%, Intermediate Mixture (of two materials from an action), Anode, Cathode, Coin Cell, etc... 
-
-#### Action
-
-An _action_ is an event performed by an _actor_ that bridges or "generating" material(s). Each _action_ produces a material, even if that material does not get measured. 
-
-Examples of a material are: Procurement, Mix, Heat, Electrode Casting, Elecrolyte Fill, Fabrication, etc...
-
-#### Measurement
-
-A measurement is an event that yields raw data for some _material_. Thus, only _analysis_ events can follow a measurement. A measurement's set of parameters detail the _procedure_ 
-
-Examples of a measurement are: X-ray diffraction, C/10 Coin Cell Cycling, etc...
-
-#### Analysis
-
-An analysis event performed through an _AnalysisMethod_ analyses a _measurement_ or other _analysis_ event. 
-
-### Parameters
-
-Every abstraction in the schema requires a set of parameters that dictacts the logic of the abstraction. The two types of parameter are schematic, i.e represent fields needed to construct the data layer (timestamp or name parameter for example), and some are event scoped, and represent fields a user details to distinguish one event from another (e.g. hcl_mix_temp: 230)
-"""
-
 from typing import List, Dict, Any, Literal, Optional, Union, Tuple
 from time import time_ns
-from src import ingredient
-from src.ingredient import Ingredient, UnspecifiedAmountIngredient
+from util.log import Log
 from util.versionstamp import versionstamp, versionid
-from pydantic import BaseModel
 from abc import ABC, abstractmethod
-from parameter import Parameter
 from src.actor import Actor
+
+"""
+TODO:
+- Implement a `view` class for all given event types, which will allow us to view events in a more structured way.
+- Implement a `logger` class to handle logging of events.
+- Implement the `save` method to persist events to the DB
+- Implement `to_dict` and `from_dict` methods for serialization and deserialization.
+"""
+
+
 
 vm = versionstamp()
 
@@ -59,14 +36,15 @@ class EventList(List['BaseEvent']):
 
 
 
-class BaseEvent(BaseModel, ABC):
+class BaseEvent(ABC):
     def __init__(
             self,
             name: str,
-            upstream: List[Dict[str, versionid]] = None,
-            downstream: List[Dict[str, versionid]] = None,
+            upstream: Optional[List[Dict[str, versionid]]] = None,
+            downstream: Optional[List[Dict[str, versionid]]] = None,
             tags: Optional[List[str]] = None,
-            event_type: Literal["action", "material", "measurement", "analysis"] = None,
+            log: Optional[Log] = None,
+            event_type: Optional[Literal["action", "material", "measurement", "analysis"]] = "action",
         ):
             if len(name) < 3:
                 raise ValueError("Event name must be at least 3 characters long.")
@@ -82,8 +60,8 @@ class BaseEvent(BaseModel, ABC):
             self.updated_at = None
             self.history = []
             self._contents = {}
-            self.parameters: Parameter = Parameter()
             self.type = event_type
+            self.log = (log or Log(name)).with_context(event=name, event_type=event_type, event_id=self.id)
             for item in upstream or []:
                 self.upstream.append(item)
             for item in downstream or []:
@@ -126,6 +104,10 @@ class BaseEvent(BaseModel, ABC):
         else:
             raise TypeError("Downstream event must be a BaseEvent or a dict representation of one.")
 
+    @abstractmethod
+    def invalid(self) -> bool:
+        pass
+
 
 class Material(BaseEvent):
     def __init__(
@@ -134,9 +116,10 @@ class Material(BaseEvent):
             upstream: Optional[List[Dict[str, versionid]]] = None,
             downstream: Optional[List[Dict[str, versionid]]] = None,
             tags: Optional[List[str]] = None,
+            log: Optional[Log] = None,
             **contents: Any
         ):
-        super().__init__(name, upstream or [], downstream or [], tags, event_type="material")
+        super().__init__(name, upstream or [], downstream or [], tags, event_type="material", log=log)
         self._contents = contents
 
     def invalid(self):
@@ -150,6 +133,37 @@ class Material(BaseEvent):
         return False
 
 
+class Ingredient():
+    def __init__(
+            self,
+            material: Material,
+            amount: Optional[float],
+            unit: Optional[str],
+            name: Optional[str] = None,
+            **contents,
+            ):
+        # Inherit material name if ingredient name is not provided
+        if name is None:
+            name = material.name
+        self.name = name
+        self.material = material
+        self.amount = amount
+        self.unit = unit
+        self._contents = contents
+
+    def __repr__(self) -> str:
+        return f"<Ingredient ** {self.name} ** {self.material} ** {self.amount} {self.unit if self.unit else 'units'}>"
+
+class UnspecifiedAmountIngredient(Ingredient):
+    def __init__(self, material: Material, name: Optional[str] = None, **contents):
+        super().__init__(material=material, amount=None, unit=None, name=name, **contents)
+
+class WholeIngredient(Ingredient):
+    def __init__(self, material: Material, name: Optional[str] = None, **contents):
+        super().__init__(material=material, amount=100.0, unit="percent", name=name, **contents)
+
+
+
 class Action(BaseEvent):
     def __init__(
             self,
@@ -158,9 +172,10 @@ class Action(BaseEvent):
             ingredients: List[Ingredient] = [],
             gen_materials: Optional[List[Material]] = [],
             tags: Optional[List[str]] = None,
+            log: Optional[Log] = None,
             **contents,
         ):
-        super().__init__(name, event_type="action", tags=tags)
+        super().__init__(name, event_type="action", tags=tags, log=log)
         self._contents = contents
         self.actor = actor
         self.ingredients = []
@@ -192,23 +207,146 @@ class Action(BaseEvent):
     def generate_generic_material(self, name: Optional[str] = None) -> Material:
         if len(self.gen_materials) > 0:
             raise ValueError("Cannot generate a generic material when there are already generated materials.")
-        if name is None:
-            name = f"{self.name}.{vm()[8:]}"
-        generic = Material(name=name)
+        """
+        TODO: A Lab view (view over the whole lab) which houses the experiments->sample->material should generate
+        the material name based on an intelligent naming scheme, e.g. "ExperimentName.MaterialName:versionstamp".
+
+        For now this method generates a material name based on the action name and list of ingredients
+        """
+        generated_name = name
+        if generated_name is None:
+            if len(self.ingredients) > 0:
+                ingredient_names = "".join(ingredient.name for ingredient in self.ingredients)
+                # Is this name too long?
+                generated_name = f"{self.name}.{ingredient_names}:{vm()}"
+            else:
+                generated_name = f"{self.name}.NI:{vm()}"
+
+        generic = Material(name=generated_name)
         generic.add_upstream(self)
         self.gen_materials = [generic]
         self.add_downstream(generic)
-
-
         return generic
 
+    def invalid(self) -> bool:
+        """
+        An action event is invalid if its upstream contains anything but a material, or if its downstream contains anything but a material or measurement event, or if It is not linked to any generated materials nor ingredients.
+        """
+        if any(event.type not in ["material"] for event in self.upstream):
+            return True
+        if any(event.type not in ["material", "measurement"] for event in self.downstream):
+            return True
+        if len(self.gen_materials) == 0 and len(self.ingredients) == 0:
+            return True
+        return False
+
+class Measurement(BaseEvent):
+    def __init__(
+            self,
+            name: str,
+            material: Optional[Material] = None,
+            actor: Optional[Actor] = None,
+            tags: Optional[List[str]] = None,
+            log: Optional[Log] = None,
+            **contents: Any,
+            ):
+        super(Measurement, self).__init__(
+                name=name, tags=tags, event_type="measurement", log=log, **contents
+        )
+        self._material = None
+        self._actor = None
+        if material:
+            self.material = material
+        if actor:
+            self.actor = actor
+        self._contents = contents
+
+    def invalid(self) -> bool:
+        """
+        A measurement event is invalid if its upstream contains anything but a material, or if its downstream contains anything but an analysis event.
+        """
+        if any(event.type not in ["material"] for event in self.upstream):
+            return True
+        if any(event.type not in ["analysis"] for event in self.downstream):
+            return True
+        return False
+
+    def set_material(self, material: Material):
+        if not isinstance(material, Material):
+            raise TypeError("Material must be a Material instance.")
+        if self._material is not None:
+            raise ValueError("Materials is already set.")
+        self._material = material
+        self.material.add_downstream(self)
+        self.add_upstream(material)
 
 
+    def set_actor(self, actor: Actor):
+        if not isinstance(actor, Actor):
+            raise TypeError("Actor must be an Actor instance.")
+        self._actor = actor
+        self.actorid = actor.id
 
 
-          
-            
+class Analysis(BaseEvent):
+    def __init__(
+            self,
+            name: str,
+            actor: Optional[Actor] = None,
+            measurements: Optional[List[Measurement]] = None,
+            upstream_analysis: Optional[List["Analysis"]] = None,
+            tags: Optional[List[str]] = None,
+            **contents: Any,
+            ):
+        super(Analysis, self).__init__(
+                name=name, tags=tags, event_type="analysis", **contents
+                )
+        
+        # self.actorid = None
+        self._measurements = []
+        self._upstream_analysis = []
+        self._actor = None
+        self._contents = contents
+
+        if actor:
+            self.actor = actor
+        for measurement in measurements or []:
+            self.add_measurement(measurement)
+
+        for analysis in upstream_analysis or []:
+            self.add_upstream_analysis(analysis)
 
 
+    def add_measurement(self, measurement: Measurement) -> None:
+        if not isinstance(measurement, Measurement):
+            raise TypeError("Measurement must be a Measurement instance.")
+        if measurement in self._measurements:
+            return
+        measurement.add_downstream(self)
+        self.add_upstream(measurement)
+        self._measurements.append(measurement)
+
+    def add_upstream_analysis(self, analysis: 'Analysis') -> None:
+        if not isinstance(analysis, Analysis):
+            raise TypeError("Upstream analysis must be an Analysis instance.")
+        if analysis in self._upstream_analysis:
+            return
+        analysis.add_downstream(self)
+        self.add_upstream(analysis)
+        self._upstream_analysis.append(analysis)
+
+    def invalid(self) -> bool:
+        """
+        An analysis event is invalid if its upstream contains anything but a measurement or analysis event, or if its downstream contains anything but an analysis event.
+        """
+        if len(self._upstream_analysis) == 0 and len(self._measurements) == 0:
+            return True
+        if self._actor is None:
+            return True
+        if any(event.type not in ["measurement", "analysis"] for event in self.upstream):
+            return True
+        if any(event.type not in ["analysis"] for event in self.downstream):
+            return True
+        return False
 
 
