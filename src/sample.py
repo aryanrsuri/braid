@@ -132,8 +132,17 @@ class Sample:
     def plot_graph(self):
         import matplotlib.pyplot as plt
         pos = nx.spring_layout(self.graph())
+        # different color for each type of node
+
+        node_colors = {
+            'material': 'lightgreen',
+            'action': 'lightcoral',
+            'measurement': 'lightblue',
+            'analysis': 'lightyellow'
+        }
+        node_color_map = [node_colors[data['type']] for node, data in self.graph().nodes(data=True)]
         labels = {node: f"{node}\n{data['name']}\n({data['type']})" for node, data in self.graph().nodes(data=True)}
-        nx.draw(self.graph(), pos, with_labels=True, labels=labels, node_size=1000, node_color='lightblue', font_size=8, font_color='black', arrows=True)
+        nx.draw(self.graph(), pos, with_labels=True, labels=labels, node_size=1000, node_color=node_color_map, font_size=8, font_color='black', arrows=True)
         edge_labels = nx.get_edge_attributes(self.graph(), 'type')
         nx.draw_networkx_edge_labels(self.graph(), pos, edge_labels=edge_labels)
         plt.show()
