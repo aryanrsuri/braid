@@ -369,7 +369,7 @@ class Action(BaseEvent):
             **contents,
         ):
         super().__init__(name, tags=tags, event_type="action", log=log,
-                         , created_at=created_at, updated_at=updated_at, **contents)
+                         created_at=created_at, updated_at=updated_at, **contents)
 
         self.id = vm()  
         self.actor = actor 
@@ -466,6 +466,9 @@ class Measurement(BaseEvent):
         self._material = None
         self._actor = None
         self.log = (log or Log(name)).with_context(
+            measurement_name=name,
+            measurement_id=self.id,
+        )
         # _contents is handled by super().__init__ now
 
         if material:
