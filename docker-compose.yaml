@@ -1,0 +1,34 @@
+version: "3.9"
+
+services:
+
+  app:
+    container_name: braid_api
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - ./.venv:/app/.venv  # Mount your local virtualenv if you want to use it
+    working_dir: /app
+    environment:
+      - PYTHONUNBUFFERED=1
+      - DB_HOST=postgres
+      - DB_PORT=5432
+      - DB_USER=testuser
+      - DB_PASSWORD=testpass
+      - DB_NAME=testdb
+    command: [".venv/bin/uvicorn", "api.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
+    depends_on:
+      - postgres
+
+  postgres:
+    image: postgres:15
+    container_name: braid_postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: testuser
+      POSTGRES_PASSWORD: testpas_
+

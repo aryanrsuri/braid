@@ -1,3 +1,4 @@
+from src.sample import Sample
 from src.actor import Actor
 from src.event import *
 from util.log import Log
@@ -40,6 +41,8 @@ if __name__ == "__main__":
             ingredients=[ingr1, ingr2],
             log=base_log,
         )
+        action.add_upstream(material_1)
+        action.add_upstream(material_2)
         base_log.info("action created", action_name=action.name, action_id=action.id)
 
     with base_log.trace("generate_material"):
@@ -71,4 +74,23 @@ if __name__ == "__main__":
         sleep(1)  
         base_log.info("synthesis completed", actor=actor.name, actor_id=actor.id)
 
+
+    base_log.info("Sample creation started")
+    with base_log.trace("create_sample") as span:
+        timec = time_ns() // 1_000
+        sample = Sample(name=f"sample_{timec}", description="Sample for testing purposes", tags=["test", "sample"], log=base_log)
+        sample.add_event(action)
+        sample.add_event(measurement)
+        sample.add_event(analysis)
+        sample.save()
+        base_log.info("Valid graph?", is_valid=sample.valid_graph())
+        base_log.info("Sample created", sample_name=sample.name, sample_id=sample.id)
+        print("sample is valid?", sample.valid_graph()) 
+        sample.plot_graph()
+        for event in sample.events:
+            # print with formatting
+            print(f"Event in sample: {event.id}, {event.name}, {event.type}")
+            
+
+            base_log.info("Event in sample", event_id=event.id, event_name=event.name, event_type=event.type)
 

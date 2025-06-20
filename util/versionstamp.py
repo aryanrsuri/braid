@@ -33,6 +33,6 @@ class versionstamp:
             else:
                 self._count += 1
             packed = pack(">QHH", self._prev_time, self._count, getrandbits(16))
-        return packed.hex()
+            return packed.hex()
     
 

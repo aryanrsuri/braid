@@ -1,0 +1,4 @@
+- [ ] Add log.info in the classes themselves
+- [ ] Implement `experiment`
+- [ ] Implement `view` for each construct
+- [ ] Implement DB persistence
