@@ -1,4 +1,13 @@
-- [ ] Add log.info in the classes themselves
+- [ ] Add class logging
+  - [x] Add log.error to the event classes
 - [ ] Implement `experiment`
+- [ ] Optiona: Implement task or process?
 - [ ] Implement `view` for each construct
+  - [ ] Action view
+  - [ ] Material view
+  - [ ] Analysis view
+  - [ ] Measurement view
+  - [ ] Sample view
+  - [ ] Experiment view
+  - [ ] ? Task view
 - [ ] Implement DB persistence
