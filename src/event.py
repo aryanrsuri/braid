@@ -16,7 +16,7 @@ class EventList(List['BaseEvent']):
             super().append(event)
         else:
             self.log.error("Value must be a BaseEvent or a dict representation of one.")
-            raise TypeError("Value must be a BaseEvent or a dict representation of one.")
+            return
 
     def get(self, index: int) -> Union['BaseEvent', Dict[str, Any]]:
         if 0 <= index < len(self):
@@ -40,10 +40,10 @@ class BaseEvent(ABC):
             updated_at: Optional[int] = None, # Add updated_at to init
             **contents: Any, # To capture any extra contents
         ):
-            if len(name) < 3:
-                raise ValueError("Event name must be at least 3 characters long.")
+
             if event_type is None or event_type not in ["action", "material", "measurement", "analysis"]:
                 raise ValueError("event_type must be one of 'action', 'material', 'measurement', or 'analysis'.")
+            self.log = (log or Log(name)).with_context(event=name, event_type=event_type, event_id=self.id)
 
             self.id = id if id is not None else vm()
             self.name = name
@@ -53,27 +53,13 @@ class BaseEvent(ABC):
             self.history = []
             self._contents = contents # Store generic contents
             self.type = event_type
-            self.log = (log or Log(name)).with_context(event=name, event_type=event_type, event_id=self.id)
 
             # Initialize upstream and downstream as EventList,
             # and use from_dict when adding initial items if they are dicts
             self.upstream = EventList()
             if upstream:
                 for item in upstream:
-                    # Pass original dictionary if it contains full event data
-                    # Otherwise, just pass the ID and type as dict to be handled by add_upstream
                     if isinstance(item, dict) and "event_id" in item and "type" in item:
-                        # If `item` is a simple dict like `{'event_id': '...', 'type': '...'}`
-                        # and not a full event dict, we still need to add it as a stub.
-                        # For now, `add_upstream` expects a BaseEvent object or a full dict.
-                        # Let's ensure `add_upstream` correctly handles the format of upstream/downstream lists
-                        # which contain dicts with 'event_id' and 'type'.
-                        # The `graph` method in Sample expects these to be BaseEvent objects,
-                        # so we need to convert them here or ensure they are always BaseEvent objects.
-                        # For now, let's assume `upstream` and `downstream` lists passed to init
-                        # might contain the minimal dicts from `to_dict` or full event dicts.
-                        # The current `add_upstream` logic requires a BaseEvent object or a full event dict.
-                        # We will modify `add_upstream/downstream` to handle the stored dicts.
                         self.add_upstream_id(item["event_id"], item.get("type")) # Use a new method to add just ID
                     else:
                         # If it's already a BaseEvent or a full event dict, it will be handled by EventList.append
@@ -105,11 +91,8 @@ class BaseEvent(ABC):
         # save
         return (self.id, self.name, self.updated_at)
 
-    # New method to add an upstream relationship using just ID and type
-    # This is for internal graph representation, not for creating full event objects
     def add_upstream_id(self, event_id: versionid, event_type: Optional[str] = None) -> None:
         # Create a "stub" event object with just id and type for graph purposes
-        # This prevents the TypeError from Sample.graph()
         class StubEvent:
             def __init__(self, id, type):
                 self.id = id
@@ -117,7 +100,6 @@ class BaseEvent(ABC):
         self.upstream.append(StubEvent(event_id, event_type or "unknown"))
 
 
-    # New method to add a downstream relationship using just ID and type
     def add_downstream_id(self, event_id: versionid, event_type: Optional[str] = None) -> None:
         class StubEvent:
             def __init__(self, id, type):
@@ -130,11 +112,11 @@ class BaseEvent(ABC):
         if isinstance(event, BaseEvent):
             self.upstream.append(event)
         elif isinstance(event, dict):
-            # If it's a dict, use from_dict to get the actual event object
             event_obj = BaseEvent.from_dict(event)
             self.upstream.append(event_obj)
         else:
-            raise TypeError("Upstream event must be a BaseEvent or a dict representation of one.")
+            self.log.error("Upstream event must be a BaseEvent or a dict representation of one.")
+            return
 
     def add_downstream(self, event: Union['BaseEvent', Dict[str, Any]]) -> None:
         if isinstance(event, BaseEvent):
@@ -144,7 +126,8 @@ class BaseEvent(ABC):
             event_obj = BaseEvent.from_dict(event)
             self.downstream.append(event_obj)
         else:
-            raise TypeError("Downstream event must be a BaseEvent or a dict representation of one.")
+            self.log.error("Downstream event must be a BaseEvent or a dict representation of one.")
+            return
 
     @abstractmethod
     def invalid(self) -> bool:
@@ -170,7 +153,6 @@ class BaseEvent(ABC):
     def from_dict(cls, data: Dict[str, Any]) -> 'BaseEvent':
         event_type = data.get("event_type")
         if event_type == "material":
-            # Pass all dictionary items as kwargs, Material's __init__ will pick what it needs
             return Material(**data)
         elif event_type == "action":
             # For action, we need to handle actor and ingredients specially if they are dicts
@@ -241,13 +223,13 @@ class BaseEvent(ABC):
             if isinstance(material, dict):
                 material = Material.from_dict(material)
             elif not isinstance(material, Material):
-                material = None # Or raise error if material is mandatory
+                material = None 
 
             actor = data.get('actor')
             if isinstance(actor, dict):
                 actor = Actor(**actor)
             elif not isinstance(actor, Actor):
-                actor = None # Or raise error
+                actor = None 
 
             return Measurement(
                 name=data["name"],
@@ -265,7 +247,7 @@ class BaseEvent(ABC):
             if isinstance(actor, dict):
                 actor = Actor(**actor)
             elif not isinstance(actor, Actor):
-                actor = None # Or raise error
+                actor = None 
 
             measurements = []
             for meas_data in data.get('measurements', []):
@@ -294,12 +276,7 @@ class BaseEvent(ABC):
                 **data.get("contents", {})
             )
         else:
-            raise ValueError(f"Unknown event_type: {event_type}")
-
-
-# --- Event Subclasses (Material, Action, Measurement, Analysis) ---
-# Ensure these are defined below BaseEvent or imported.
-# Assuming they are in the same file for now.
+            raise ValueError(f"Unknown event type: {event_type}. Must be one of 'action', 'material', 'measurement', or 'analysis'.")
 
 class Material(BaseEvent):
     def __init__(
@@ -309,13 +286,14 @@ class Material(BaseEvent):
             downstream: Optional[List[Dict[str, versionid]]] = None,
             tags: Optional[List[str]] = None,
             log: Optional[Log] = None,
+            id: Optional[versionid] = None, 
             created_at: Optional[int] = None, # Added created_at
             updated_at: Optional[int] = None, # Added updated_at
             **contents: Any
         ):
+        self.id = vm()  
         super().__init__(name, upstream, downstream, tags, event_type="material", log=log,
                          created_at=created_at, updated_at=updated_at, **contents)
-        self.id = vm()  
 
     def invalid(self):
         if any(getattr(event, 'type', None) not in ["action"] for event in self.upstream):
@@ -368,10 +346,10 @@ class Action(BaseEvent):
             updated_at: Optional[int] = None,
             **contents,
         ):
+        self.id = vm()  
         super().__init__(name, tags=tags, event_type="action", log=log,
                          created_at=created_at, updated_at=updated_at, **contents)
 
-        self.id = vm()  
         self.actor = actor 
         self.ingredients = []
         self.gen_materials = []
@@ -396,10 +374,11 @@ class Action(BaseEvent):
             ingredient.material.add_downstream(self)
             self.ingredients.append(ingredient)
         elif isinstance(ingredient, dict):
-            self.log.debug("Adding ingredient from dict representation.")
-            raise TypeError("Please pass Ingredient or Material objects to add_ingredient, not raw dicts.")
+            self.log.error("Please pass Ingredient or Material objects to add_ingredient, not raw dicts.")
+            return
         else:
-            raise TypeError("Ingredient must be an Ingredient or Material instance.")
+            self.log.error("Ingredient must be an Ingredient or Material instance.")
+            return
 
 
     def add_gen_material(self, material: Union[Material, Dict[str, Any]]) -> None:
@@ -417,12 +396,14 @@ class Action(BaseEvent):
             self.gen_materials.append(material)
         else:
             self.log.error("Generated material must be a Material instance or a dict representation.")
-            raise TypeError("Generated material must be a Material instance or a dict representation.")
+            return
 
 
     def generate_generic_material(self, name: Optional[str] = None) -> Material:
         if len(self.gen_materials) > 0:
-            raise ValueError("Cannot generate a generic material when there are already generated materials.")
+            self.log.error("Cannot generate a generic material when there are already generated materials.")
+            #FIXME: Should return None 
+            return self.gen_materials[0]  
 
         generated_name = name
         if generated_name is None:
@@ -459,10 +440,10 @@ class Measurement(BaseEvent):
             updated_at: Optional[int] = None,
             **contents: Any,
             ):
+        self.id = vm()
         super(Measurement, self).__init__(
                 name=name, tags=tags, event_type="measurement", log=log, created_at=created_at, updated_at=updated_at, **contents
         )
-        self.id = vm()
         self._material = None
         self._actor = None
         self.log = (log or Log(name)).with_context(
@@ -493,9 +474,11 @@ class Measurement(BaseEvent):
     @material.setter
     def material(self, material_obj: Material):
         if not isinstance(material_obj, Material):
-            raise TypeError("Material must be a Material instance.")
+            self.log.error("Material must be a Material instance.")
+            return
         if self._material is not None:
-            raise ValueError("Material is already set.")
+            self.log.error("Material is already set for this measurement.")
+            return
         self._material = material_obj
         self.add_upstream(material_obj) # Add as upstream BaseEvent
         material_obj.add_downstream(self) # Link the material back
@@ -508,7 +491,7 @@ class Measurement(BaseEvent):
     def actor(self, actor_obj: Actor):
         if not isinstance(actor_obj, Actor):
             self.log.error("Actor must be an Actor instance.")
-            raise TypeError("Actor must be an Actor instance.")
+            return
         self._actor = actor_obj
 
 class Analysis(BaseEvent):
@@ -524,12 +507,12 @@ class Analysis(BaseEvent):
             updated_at: Optional[int] = None,
             **contents: Any,
             ):
+        self.id = vm()
         super(Analysis, self).__init__(
                 name=name, tags=tags, event_type="analysis", log=log,
                 created_at=created_at, updated_at=updated_at, **contents
                 )
 
-        self.id = vm()
         self._measurements = []
         self._upstream_analysis = []
         self._actor = None
@@ -550,7 +533,8 @@ class Analysis(BaseEvent):
     @actor.setter
     def actor(self, actor_obj: Actor):
         if not isinstance(actor_obj, Actor):
-            raise TypeError("Actor must be an Actor instance.")
+            self.log.error("Actor must be an Actor instance.")
+            return
         self._actor = actor_obj
 
     def add_measurement(self, measurement: Union[Measurement, Dict[str, Any]]) -> None:
@@ -559,8 +543,8 @@ class Analysis(BaseEvent):
         elif isinstance(measurement, Measurement):
             measurement_obj = measurement
         else:
-            raise TypeError("Measurement must be a Measurement instance or a dict representation.")
-
+            self.log.error("Measurement must be a Measurement instance or a dict representation.")
+            return
         if measurement_obj in self._measurements:
             return
         measurement_obj.add_downstream(self)
@@ -573,7 +557,8 @@ class Analysis(BaseEvent):
         elif isinstance(analysis, Analysis):
             analysis_obj = analysis
         else:
-            raise TypeError("Upstream analysis must be an Analysis instance or a dict representation.")
+            self.log.error("Upstream analysis must be an Analysis instance or a dict representation.")
+            return
 
         if analysis_obj in self._upstream_analysis:
             return

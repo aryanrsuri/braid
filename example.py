@@ -90,10 +90,12 @@ with log.trace("create_sample"):
 
     s = Sample(name="first_sample", events=all_nodes, log=log)
     s.log.info("Sample created", sample_name=s.name, sample_id=s.id)
+    """
     for event in s.events:
         print(event)
         print("--" * 10)
         s.log.info("Event added", event_name=event.name, event_id=event.id)
+    """
     s.plot_graph()
 
 
