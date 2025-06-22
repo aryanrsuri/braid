@@ -3,6 +3,7 @@ from time import time_ns
 from util.log import Log
 from src.event import BaseEvent, Material, Action, Measurement, Analysis, WholeIngredient
 from typing import List, Optional, Dict, Any
+from src.experiment import Status
 import networkx as nx
 
 
@@ -15,8 +16,11 @@ class Sample:
         name: str,
         description: str = "",
         events: List[allowed_events] = [],
+        status: Status = Status.PENDING,
         tags: List[str] = [],
         log: Optional[Log] = None,
+        # TODO: Either should reference the experiment_id, or the task_id (that owns it), 
+        experiment_id: Optional[str] = None,
         **contents: Any
     ):
         self.name = name
@@ -27,6 +31,7 @@ class Sample:
         self.updated_at = None
         self.id = vm()
         self.events = []
+        self.status = status
 
         if events is not None:
             for event in events:

@@ -6,7 +6,7 @@ from enum import Enum
 
 vm = versionstamp()
 
-class Status(Enum):
+class ActorStatus(Enum):
     OCCUPIED = "occupied",
     LOCKED = "locked",
     IDLE = "idle",
@@ -19,7 +19,7 @@ class BaseActor:
             name: str,
             description: str,
             tags: Optional[List[str]] = None,
-            status: Status = Status.IDLE,
+            status: ActorStatus = ActorStatus.IDLE,
             **contents: Any
             ):
         self.id = vm()
@@ -84,7 +84,7 @@ class Actor(BaseActor):
             name: str,
             description: str,
             tags: Optional[List[str]] = None,
-            status: Status = Status.IDLE,
+            status: ActorStatus = ActorStatus.IDLE,
             **contents: Any
             ):
         super().__init__(name, description, tags, status, **contents)
