@@ -5,7 +5,8 @@
 A lab, its worfklows, samples, and events are all represnted by foundational `block` that can be structured in anyway. The focus of braid is to ensure the all data end-to-end is aggregated in such a way to provide the simplest method of model training.
 
 
-![fig2](https://github.com/user-attachments/assets/dd698d30-e9c5-445f-a1c2-a7cc234f36a3)
+![fig2](https://github.com/user-attachments/assets/93af69a8-5330-4b53-a190-0c30f02e9f8d)
+
 
 ## Architecture
 
