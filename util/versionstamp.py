@@ -4,7 +4,7 @@ Utility function for generating a new version stamp, validating a version stamp,
 """
 from time import time_ns
 from threading import Lock
-from struct import pack, unpack
+from struct import pack
 from random import getrandbits
 
 type versionid = str  # Type alias for version stamp, represented as a hex string

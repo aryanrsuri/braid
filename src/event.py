@@ -4,6 +4,7 @@ from util.log import Log
 from util.versionstamp import versionstamp, versionid
 from abc import ABC, abstractmethod
 from src.actor import Actor
+from src.task import Task
 
 vm = versionstamp()
 
@@ -35,7 +36,9 @@ class BaseEvent(ABC):
             tags: Optional[List[str]] = None,
             log: Optional[Log] = None,
             event_type: Optional[Literal["action", "material", "measurement", "analysis"]] = "action",
-            id: Optional[versionid] = None, # Add id to init to allow setting it from dict
+            id: Optional[versionid] = None,
+            task_id: Optional[versionid] = None, 
+            parameters: Optional[Dict[str, Any]] = None,
             created_at: Optional[int] = None, # Add created_at to init
             updated_at: Optional[int] = None, # Add updated_at to init
             **contents: Any, # To capture any extra contents
@@ -48,6 +51,8 @@ class BaseEvent(ABC):
             self.id = id if id is not None else vm()
             self.name = name
             self.tags = tags or []
+            self.task_id = task_id
+            self.parameters = parameters or {}
             self.created_at = created_at if created_at is not None else time_ns() // 1_000
             self.updated_at = updated_at
             self.history = []
@@ -338,6 +343,7 @@ class Action(BaseEvent):
             self,
             name: str,
             actor: Actor,
+#           id: Optional[versionid] = None,
             ingredients: Optional[List[Union[Ingredient, Dict[str, Any]]]] = None, 
             gen_materials: Optional[List[Union[Material, Dict[str, Any]]]] = None,
             tags: Optional[List[str]] = None,
@@ -408,10 +414,12 @@ class Action(BaseEvent):
         generated_name = name
         if generated_name is None:
             if len(self.ingredients) > 0:
-                ingredient_names = "".join(ingredient.name for ingredient in self.ingredients)
-                generated_name = f"{self.name}.{ingredient_names}:{vm()}"
+                generated_name = f"{self.name}"
+                for ingredient in self.ingredients:
+                    generated_name += f"+{ingredient.name}"
+                generated_name += f"_{vm()[-4:]}"
             else:
-                generated_name = f"{self.name}.NI:{vm()}"
+                generated_name = f"{self.name}_NI{vm()[-4:]}"
 
         generic = Material(name=generated_name)
         generic.add_upstream(self) 

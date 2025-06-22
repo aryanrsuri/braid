@@ -1,9 +1,10 @@
-from util.versionstamp import versionstamp
+from util.versionstamp import versionid, versionstamp
 from time import time_ns
 from util.log import Log
 from src.event import BaseEvent, Material, Action, Measurement, Analysis, WholeIngredient
 from typing import List, Optional, Dict, Any
-from src.experiment import Status
+from src.experiment import Experiment
+from util.status import Status
 import networkx as nx
 
 
@@ -13,23 +14,22 @@ allowed_events = Material | Action | Measurement | Analysis
 class Sample:
     def __init__(
         self,
-        name: str,
+        experiment: Experiment,
+        name: Optional[str] = None,
         description: str = "",
         events: List[allowed_events] = [],
         status: Status = Status.PENDING,
         tags: List[str] = [],
         log: Optional[Log] = None,
-        # TODO: Either should reference the experiment_id, or the task_id (that owns it), 
-        experiment_id: Optional[str] = None,
         **contents: Any
     ):
-        self.name = name
         self.description = description
         self.tags = tags
         self._contents = contents
         self.created_at = time_ns() // 1_000
         self.updated_at = None
         self.id = vm()
+        self.experiment = experiment
         self.events = []
         self.status = status
 
@@ -37,11 +37,27 @@ class Sample:
             for event in events:
                 self.add_event(event)
 
-        self.log = (log or Log(name)).with_context(
-            sample_name = name,
+        self.name = self.generate_sample_name(name)
+        self.log = (log or Log(self.name)).with_context(
+            sample_name = self.name,
             sample_id = self.id,
             events = [event.id for event in self.events] if self.events else []
         )
+
+    def generate_sample_name(self, name: Optional[str]) -> str:
+        if name:
+            return name
+        # Format: 3 digits Lab code 3 digits experiment code . 3 digit project code : 6 digits timestamp + 2 random
+        # FIXME: Perf improvements here
+        lab_code = self.experiment.lab.code[:3].upper()
+        exp_code = self.experiment.id[:3].upper()
+        project_code = self.experiment.project.id[:3].upper()
+        timestamp = str(time_ns() // 1_000_000)[-6:]  # Last 6 digits of the timestamp
+        random_suffix = str(vm())[-2:]
+        name = f"{lab_code}{exp_code}.{project_code}:{timestamp}{random_suffix}"
+        return name
+
+
 
 
     def add_event(self, event: allowed_events):
@@ -104,7 +120,6 @@ class Sample:
         for action in actions[:-1]:
             if len(action.gen_materials) > 1:
                 self.log.error("Action must generate a single or no material for linear sample process")
-                # Fix: raiseExceptions is not a built-in function, should be `raise`
                 raise ValueError("Action must generate a single or no material for linear sample process")
         for a_0, a_1 in zip(actions, actions[1:]):
             if len(a_1.ingredients) == 0:
@@ -146,7 +161,7 @@ class Sample:
             'analysis': 'lightyellow'
         }
         node_color_map = [node_colors[data['type']] for node, data in self.graph().nodes(data=True)]
-        labels = {node: f"{node}\n{data['name']}\n({data['type']})" for node, data in self.graph().nodes(data=True)}
+        labels = {node: f"{data['name']}\n({data['type']})" for node, data in self.graph().nodes(data=True)}
         nx.draw(self.graph(), pos, with_labels=True, labels=labels, node_size=1000, node_color=node_color_map, font_size=8, font_color='black', arrows=True)
         edge_labels = nx.get_edge_attributes(self.graph(), 'type')
         nx.draw_networkx_edge_labels(self.graph(), pos, edge_labels=edge_labels)

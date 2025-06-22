@@ -1,65 +1,19 @@
+from src.task import Task
 from time import time_ns
 from src.event import Material, Action, Measurement, Analysis
-from typing import List, Optional, Dict, Any, Literal, Union
-from lab import Lab, Project
+from typing import List, Optional, Dict, Any, Literal, Union, TYPE_CHECKING
+from src.lab import Lab, Project
 from abc import ABC
 from enum import Enum
-from util.versionstamp import versionstamp
+from util.versionstamp import versionid, versionstamp
 from util.log import Log
-from src.sample import Sample
+from util.status import Status
 vm = versionstamp()
-"""
-An experiment Is the main unit of work in the `lab`. 
-it is a is a grouping of samples, that are related to some `project`.
 
-An experiment has an id, view, status, and the set of samples
-which are applied to those samples to form the DAG for that sample.
+if TYPE_CHECKING:
+    from src.sample import Sample 
 
-Samples are named in a deterministic way, based on the project name, experiment name, and sample context
-"""
-
-class Status(Enum):
-    PENDING = "pending"
-    RUNNING = "running"
-    COMPLETED = "completed"
-    ERROR = "error"
-    CANCELLED = "cancelled"
-
-"""
-
-class Task():
-    def __init__(
-        self,
-        log: Log,
-        name: str,
-        event_type: Literal["action", "measurement", "analysis", "material"] = "action",
-        status: Status = Status.PENDING, 
-        description: Optional[str] = None,
-        tags: List[str] = [],
-        samples: List[Sample] = [],
-        **contents: Any
-    ):
-        self.id = vm()
-        self.name = name
-        self._contents = contents
-        self.description = description or ""
-        self.log = (log or Log(name)).with_context(
-            task_name=name,
-            task_id=self.id,
-            samples=[sample.id for sample in samples] if samples else []
-        )
-        self.created_at = time_ns() // 1_000
-        self.updated_at = None
-        self.tags = tags or []
-        self.samples = samples or []
-
-"""
-
-# For now, Task will just be an alias for Event
-# Time will tell if we need a wrapper around Event(s) to represent a Task
-Task = Union[Material, Action, Measurement, Analysis]
-
-class Experiment():
+class Experiment:
     def __init__(
         self,
         name: str,
@@ -69,7 +23,7 @@ class Experiment():
         status: Status = Status.PENDING,
         description: Optional[str] = None,
         tags: List[str] = [],
-        samples: List[Sample] = [],
+        samples: List['Sample'] = [],
         tasks: List[Task] = [],
         **contents: Any
         ):
@@ -92,7 +46,6 @@ class Experiment():
         self.tasks = tasks or []
         self.lab = lab
         self.project = project
-        self.log.info(f"Experiment {self.name} created in lab {self.lab.lab_name} for project {self.project.name}")
         self.save()
 
     def save(self):
@@ -120,8 +73,9 @@ class Experiment():
     def __repr__(self):
         return f"Experiment(name={self.name}, id={self.id}, created_at={self.created_at})"
 
-    def create_sample(self, name: str, description: str = "", tags: List[str] = [], **contents: Any) -> Sample:
-        sample = Sample(name=name, description=description, tags=tags, log=self.log, **contents)
+    def create_sample(self, description: str = "", tags: List[str] = [], **contents: Any) -> 'Sample':
+        from src.sample import Sample
+        sample = Sample(description=description, tags=tags, log=self.log, experiment=self, **contents)
         self.samples.append(sample)
         self.log.info(f"Sample {sample.name} created in experiment {self.name}")
         return sample

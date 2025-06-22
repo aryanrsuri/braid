@@ -1,3 +1,5 @@
+from src.experiment import Experiment
+from src.lab import Lab
 from src.sample import Sample
 from src.actor import Actor
 from src.event import *
@@ -88,7 +90,28 @@ with log.trace("create_sample"):
 
     all_nodes = [p0, m0, p1, m1, p2, m2, p3, m3, me0, a0]
 
-    s = Sample(name="first_sample", events=all_nodes, log=log)
+    lab = Lab(
+        name="Palo Alto Lab",
+        code="PAL",
+        location="Palo Alto, CA",
+    )
+    project = lab.create_project(
+        project_name="Dopants in TiO2",
+        description="Investigating the effects of various dopants on the properties of TiO2",
+        tags=["TiO2", "dopants", "materials science"],
+    )
+    exp = Experiment(
+        name="Zr dopant sweep",
+        lab=lab,
+        project = project,
+        description="Study the effect of Zr doping on TiO2",
+        tags=["Zr", "dopant", "TiO2"],
+        tasks=[],
+        samples=[],
+        log=log,
+    )
+
+    s = Sample(name="first_sample", events=all_nodes, log=log, experiment=exp)
     s.log.info("Sample created", sample_name=s.name, sample_id=s.id)
     """
     for event in s.events:
